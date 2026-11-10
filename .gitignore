@@ -1,0 +1,144 @@
+﻿# ⚙️ ASSET MANAGEMENT SYSTEM - BACKEND REST API
+
+> **Hệ Thống Quản Lý Thiết Bị Nội Bộ (Máy Chủ REST API)**  
+> **Sinh viên thực hiện:** Trương Đàm Công Quý  
+> **Công nghệ:** Spring Boot 3 (Java 17), Spring Data JPA, Hibernate, MySQL 8.0, OpenAPI 3.0 / Swagger UI  
+> **Repository Frontend liên kết:** [asset-management-frontend](https://github.com/quytruong1404/asset-management-frontend)
+
+---
+
+## 📖 TỔNG QUAN HỆ THỐNG
+
+Máy chủ Backend chịu trách nhiệm xử lý toàn bộ nghiệp vụ quản lý tài sản, kiểm soát quy trình mượn - trả thiết bị, phân quyền người dùng và tính toán số liệu thống kê:
+- **Xác thực & Người dùng:** Đăng nhập, phân quyền Admin và Nhân viên (Role-based access).
+- **Quản lý danh mục & Thiết bị:** CRUD thiết bị, lọc trạng thái (*AVAILABLE, BORROWED, MAINTENANCE, BROKEN*), tìm kiếm nhanh.
+- **Quy trình mượn trả (Borrow Workflow):**
+  - Nhân viên tạo phiếu mượn $\rightarrow$ Trạng thái \PENDING\.
+  - Admin duyệt $\rightarrow$ Trạng thái \APPROVED\, tự động chuyển thiết bị sang \BORROWED\.
+  - Admin từ chối $\rightarrow$ Trạng thái \REJECTED\.
+  - Admin xác nhận hoàn trả $\rightarrow$ Trạng thái \RETURNED\, đánh giá tình trạng thiết bị đưa về kho (*AVAILABLE / MAINTENANCE / BROKEN*).
+- **Thống kê:** Dashboard KPIs, tỷ lệ phân bổ danh mục, xu hướng mượn qua các tháng.
+- **Tài liệu API tự động:** Tích hợp Swagger UI chuẩn OpenAPI 3.0 tại \/swagger-ui/index.html\.
+
+---
+
+## 🗄️ CƠ SỞ DỮ LIỆU (DATABASE SCHEMA)
+
+Toàn bộ cấu trúc bảng và dữ liệu mẫu 10+ thiết bị, 5 danh mục, 3 tài khoản khởi tạo được lưu trong:
+📁 [**database/schema.sql**](./database/schema.sql)
+
+`mermaid
+erDiagram
+    USERS ||--o{ BORROW_REQUESTS : "tạo phiếu"
+    USERS ||--o{ BORROW_REQUESTS : "phê duyệt"
+    CATEGORIES ||--o{ DEVICES : "phân loại"
+    BORROW_REQUESTS ||--|{ BORROW_ITEMS : "bao gồm"
+    DEVICES ||--o{ BORROW_ITEMS : "được mượn"
+
+    USERS {
+        bigint id PK
+        varchar username UK
+        varchar password
+        varchar full_name
+        varchar email UK
+        varchar department
+        enum role "ADMIN, EMPLOYEE"
+    }
+
+    CATEGORIES {
+        bigint id PK
+        varchar code UK
+        varchar name
+        text description
+        varchar icon
+    }
+
+    DEVICES {
+        bigint id PK
+        varchar code UK
+        varchar name
+        bigint category_id FK
+        varchar serial_number UK
+        varchar brand
+        text specifications
+        enum status "AVAILABLE, BORROWED, MAINTENANCE, BROKEN"
+        varchar location
+        varchar image_url
+    }
+
+    BORROW_REQUESTS {
+        bigint id PK
+        varchar code UK
+        bigint user_id FK
+        date borrow_date
+        date expected_return_date
+        date actual_return_date
+        text reason
+        enum status "PENDING, APPROVED, REJECTED, RETURNED, OVERDUE"
+        text admin_note
+        bigint approved_by FK
+    }
+
+    BORROW_ITEMS {
+        bigint id PK
+        bigint request_id FK
+        bigint device_id FK
+        varchar condition_before
+        varchar condition_after
+    }
+`
+
+---
+
+## 📡 DANH SÁCH REST API ENDPOINTS
+
+| Method | Endpoint | Mô tả | Quyền hạn |
+| :--- | :--- | :--- | :--- |
+| \POST\ | \/api/auth/login\ | Đăng nhập hệ thống | Public |
+| \GET\ | \/api/auth/users\ | Lấy danh sách nhân viên | All |
+| \GET\ | \/api/devices\ | Lấy danh sách thiết bị (hỗ trợ search, filter) | All |
+| \GET\ | \/api/devices/{id}\ | Chi tiết 1 thiết bị | All |
+| \POST\ | \/api/devices\ | Thêm thiết bị mới vào kho | Admin |
+| \PUT\ | \/api/devices/{id}\ | Cập nhật thông số thiết bị | Admin |
+| \PATCH\| \/api/devices/{id}/status\| Cập nhật nhanh trạng thái máy | Admin |
+| \GET\ | \/api/categories\ | Lấy danh mục thiết bị | All |
+| \POST\ | \/api/categories\ | Thêm mới danh mục | Admin |
+| \GET\ | \/api/borrow-requests\ | Toàn bộ danh sách phiếu mượn | Admin |
+| \GET\ | \/api/borrow-requests/user/{userId}\| Lịch sử phiếu mượn của nhân viên | Employee |
+| \POST\ | \/api/borrow-requests\ | Tạo phiếu yêu cầu mượn thiết bị | Employee |
+| \POST\ | \/api/borrow-requests/{id}/approval\| Admin duyệt / từ chối phiếu mượn | Admin |
+| \POST\ | \/api/borrow-requests/{id}/return\ | Admin xác nhận hoàn trả & kiểm tra tình trạng máy | Admin |
+| \GET\ | \/api/statistics\ | Lấy toàn bộ số liệu thống kê Dashboard | Admin |
+
+---
+
+## 🚀 HƯỚNG DẪN CÀI ĐẶT & CHẠY TẠI LOCAL
+
+### Yêu cầu môi trường:
+- Java JDK 17 trở lên
+- MySQL 8.0 (Tạo database \	hiet_bi_noi_bo\ và chạy \database/schema.sql\)
+
+### Lệnh chạy với Maven Wrapper (Không cần cài Maven trước):
+\\\ash
+# Linux / macOS
+./mvnw clean spring-boot:run
+
+# Windows PowerShell:
+.\mvnw.cmd clean spring-boot:run
+\\\
+
+Sau khi máy chủ khởi động thành công:
+- **API URL:** \http://localhost:8080/api\
+- **Swagger UI:** \http://localhost:8080/swagger-ui/index.html\
+"@ | Out-File -FilePath "C:\Users\Admin\Desktop\asset-management-backend\README.md" -Encoding utf8
+
+@"
+target/
+*.class
+.mvn/wrapper/maven-wrapper.jar
+.idea/
+*.iml
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
