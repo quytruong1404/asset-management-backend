@@ -63,4 +63,11 @@ public class BorrowRequestController {
             @RequestBody ReturnConfirmDto dto) {
         return ResponseEntity.ok(borrowRequestService.confirmReturn(id, dto));
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Xóa hoặc hủy phiếu mượn thiết bị")
+    public ResponseEntity<Void> deleteRequest(@PathVariable Long id) {
+        borrowRequestService.deleteRequest(id);
+        return ResponseEntity.noContent().build();
+    }
 }

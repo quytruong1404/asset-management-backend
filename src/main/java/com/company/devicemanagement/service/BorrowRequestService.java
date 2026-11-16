@@ -144,4 +144,17 @@ public class BorrowRequestService {
 
         return borrowRequestRepository.save(request);
     }
+
+    @Transactional
+    public void deleteRequest(Long id) {
+        BorrowRequest request = getRequestById(id);
+        if (request.getStatus() == RequestStatus.APPROVED) {
+            for (BorrowItem item : request.getItems()) {
+                Device device = item.getDevice();
+                device.setStatus(DeviceStatus.AVAILABLE);
+                deviceRepository.save(device);
+            }
+        }
+        borrowRequestRepository.delete(request);
+    }
 }
